@@ -132,8 +132,11 @@ onMenuAction({
 });
 
 // ---- INPUT ACTIONS ----
+let _musicStarted = false;
 onAction(action => {
     resumeCtx();
+    // Iniciar música del menú en el primer gesto del usuario
+    if (!_musicStarted) { _musicStarted = true; playMusic('menu'); }
 
     if (typeof action === 'object') {
         // Touch / click — pos ya viene en coordenadas lógicas desde input.js
@@ -503,11 +506,12 @@ async function boot() {
         loadSprite('player', 'img/Ast.png'),
         loadSprite('explosion', 'img/Astexp.png'),
         loadSprite('textures', 'img/texpreview.png'),
-        loadSprite('oxygenTank', 'img/oxygen-tank.avif'),
+        loadSprite('oxygenTank', 'img/oxygen-tank.png'),
         loadSprite('fuelCanister', 'img/combustible.jpg'),
         loadAllSounds(),
     ]);
-    playMusic('menu');
+    // La música se inicia en el primer gesto del usuario (resumeCtx lo maneja)
+    // No llamar playMusic aquí para evitar el error de AudioContext
     requestAnimationFrame(ts => { lastTime = ts / 1000; gameLoop(ts); });
 }
 
