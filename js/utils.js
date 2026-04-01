@@ -32,15 +32,12 @@ export function calcPlayerSize() {
     return { w: pw, h: ph };
 }
 
-export function setScale(v) { SCALE = v; }
 export function setMobile(v) { isMobile = v; }
 export function setSize(w, h) { W = w; H = h; }
 
 export function s(val) { return val * SCALE; }
 export function rand(min, max) { return Math.random() * (max - min) + min; }
-export function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
 export function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-export function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 export function rectCollision(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x &&
            a.y < b.y + b.h && a.y + a.h > b.y;

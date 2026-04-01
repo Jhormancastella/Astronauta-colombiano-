@@ -444,7 +444,7 @@ function _drawTabAudio(y) {
     _ctx.fillStyle = '#333';
     _ctx.font = `${s(7.5)}px Courier New`;
     _ctx.textAlign = 'center';
-    _ctx.fillText('Coloca archivos .ogg en audio/sfx/ y audio/music/', s(BASE_W / 2), s(y + 165));
+    _ctx.fillText('Audio cargado desde Cloudinary', s(BASE_W / 2), s(y + 165));
     _ctx.fillText('El juego funciona sin audio (modo silencioso)', s(BASE_W / 2), s(y + 180));
 }
 

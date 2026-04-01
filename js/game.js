@@ -1,5 +1,5 @@
 // --- GAME MAIN ---
-import { BASE_W, BASE_H, SCALE, recalcLayout, calcPlayerSize, setSize, setMobile, detectMobile,
+import { recalcLayout, calcPlayerSize, setSize, setMobile, detectMobile,
          s, rand, clamp, rectCollision, loadSprite } from './utils.js';
 import * as Utils from './utils.js';
 import { loadAllSounds, playSFX, playMusic, stopMusic, resumeCtx } from './audio.js';

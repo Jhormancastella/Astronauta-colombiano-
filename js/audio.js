@@ -1,5 +1,5 @@
 // --- AUDIO MANAGER ---
-// Archivos en: audio/sfx/*.ogg  y  audio/music/*.ogg
+// Audio cargado desde Cloudinary (URLs externas, sin archivos locales).
 // Usa Cache API para evitar re-descargas entre recargas de página.
 
 // @ts-ignore — webkitAudioContext existe en Safari antiguo
@@ -66,12 +66,18 @@ async function loadSound(key, src) {
 }
 
 export async function loadAllSounds() {
-    const sfx   = ['shoot', 'explosion', 'pickup', 'hit', 'gameover'];
-    const music = ['menu', 'gameplay'];
-    await Promise.all([
-        ...sfx.map(k   => loadSound(k, `audio/sfx/${k}.ogg`)),
-        ...music.map(k => loadSound(k, `audio/music/${k}.ogg`)),
-    ]);
+    const BASE = 'https://res.cloudinary.com/dcqnjn6fe/video/upload/q_auto/f_auto';
+    const sounds = {
+        hit:       `${BASE}/v1775041096/hit_qqxyif.wav`,
+        pickup:    `${BASE}/v1775041096/pickup_gqsh0p.ogg`,
+        explosion: `${BASE}/v1775041097/explosion_chqjzp.wav`,
+        shoot:     `${BASE}/v1775041098/shoot_dnb6qq.wav`,
+        gameover:  `${BASE}/v1775041169/gameover_wjj88y.wav`,
+        gameplay:  `${BASE}/v1775041237/gameplay_czeqyn.mp3`,
+    };
+    await Promise.all(
+        Object.entries(sounds).map(([k, url]) => loadSound(k, url))
+    );
 }
 
 // Limpia el caché de audio (útil si actualizas los archivos)

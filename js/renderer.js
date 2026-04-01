@@ -1,5 +1,5 @@
 // --- RENDERER: HUD, fondo, overlays ---
-import { s, BASE_W, BASE_H, isMobile } from './utils.js';
+import { s, BASE_W, BASE_H } from './utils.js';
 import * as Utils from './utils.js';
 import { player } from './player.js';
 import { joystick, shootButton, getJoystickRadius, getFireButtonCenter, FIRE_BTN_RADIUS } from './input.js';
@@ -204,7 +204,7 @@ export function drawPause(time) {
     _ctx.textAlign = 'center';
     _ctx.fillText('PAUSA', s(BASE_W / 2), s(BASE_H / 2 - 60));
 
-    if (isMobile) {
+    if (Utils.isMobile) {
         // Móvil: dos botones táctiles grandes
         // Botón CONTINUAR
         _ctx.fillStyle = 'rgba(232,200,64,0.12)';
@@ -283,12 +283,12 @@ export function drawGameOver(time, score, highScore, gameTime, difficultyLevel, 
     _ctx.globalAlpha = alpha;
     _ctx.fillStyle = '#fff';
     _ctx.font = `bold ${s(12)}px Courier New`;
-    _ctx.fillText(isMobile ? 'TOCA PARA REINICIAR' : 'ENTER  REINICIAR', s(BASE_W / 2), s(420));
+    _ctx.fillText(Utils.isMobile ? 'TOCA PARA REINICIAR' : 'ENTER  REINICIAR', s(BASE_W / 2), s(420));
     _ctx.globalAlpha = 1;
 
     _ctx.fillStyle = '#555';
     _ctx.font = `${s(9)}px Courier New`;
-    _ctx.fillText(isMobile ? '' : 'ESC  Menú principal', s(BASE_W / 2), s(448));
+    _ctx.fillText(Utils.isMobile ? '' : 'ESC  Menú principal', s(BASE_W / 2), s(448));
 }
 
 // ---- WEAPON HUD ----

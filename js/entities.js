@@ -1,5 +1,5 @@
 // --- ENTITIES: Fragment, Bullet, Pickup, Warning, Star ---
-import { s, rand, clamp, sprites, getTextureCells } from './utils.js';
+import { s, rand, sprites, getTextureCells } from './utils.js';
 import * as Utils from './utils.js';
 
 // Acceso dinámico a BASE_W/BASE_H (cambian con el resize)
@@ -253,5 +253,81 @@ export class Warning {
         _ctx.textAlign = 'center';
         _ctx.fillText('⚠', s(this.x), s(25));
         _ctx.globalAlpha = 1;
+    }
+}
+
+// ---- SUPPLY DROP (grande, con imagen, cae solo desde arriba) ----
+export class SupplyDrop {
+    constructor(type) {
+        this.type = type; // 'oxygen' | 'fuel'
+        this.w = 32;
+        this.h = 32;
+        this.x = rand(10, BW() - this.w - 10);
+        this.y = -this.h - 10;
+        this.speed = rand(35, 55);
+        this.alive = true;
+        this.bobOffset = rand(0, Math.PI * 2);
+        this.lifetime = 12;
+        this.amount = type === 'oxygen' ? 60 : 50;
+    }
+    update(dt) {
+        this.y += this.speed * dt;
+        this.lifetime -= dt;
+        if (this.y > BH() + 20 || this.lifetime <= 0) this.alive = false;
+    }
+    draw(time) {
+        const bob = Math.sin(time * 3 + this.bobOffset) * 3;
+        const cx = s(this.x + this.w / 2);
+        const cy = s(this.y + this.h / 2 + bob);
+        const r  = s(this.w / 2);
+
+        // Glow exterior
+        const glowColor = this.type === 'oxygen' ? 'rgba(0,150,255,0.3)' : 'rgba(0,220,80,0.3)';
+        _ctx.beginPath();
+        _ctx.arc(cx, cy, r + s(7), 0, Math.PI * 2);
+        _ctx.fillStyle = glowColor;
+        _ctx.fill();
+
+        const img = this.type === 'oxygen' ? sprites.oxygenTank : sprites.fuelCanister;
+        if (img) {
+            // Recorte circular para ocultar fondo blanco de la imagen
+            _ctx.save();
+            _ctx.beginPath();
+            _ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            _ctx.clip();
+            _ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+            _ctx.restore();
+        } else {
+            // Fallback: círculo de color
+            _ctx.beginPath();
+            _ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            _ctx.fillStyle = this.type === 'oxygen' ? '#4488ff' : '#44dd66';
+            _ctx.fill();
+        }
+
+        // Borde de color
+        const borderColor = this.type === 'oxygen' ? '#4488ff' : '#44dd66';
+        _ctx.beginPath();
+        _ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        _ctx.strokeStyle = borderColor;
+        _ctx.lineWidth = s(1.5);
+        _ctx.stroke();
+
+        // Etiqueta debajo
+        _ctx.fillStyle = borderColor;
+        _ctx.font = `bold ${s(7)}px Courier New`;
+        _ctx.textAlign = 'center';
+        _ctx.textBaseline = 'middle';
+        _ctx.fillText(this.type === 'oxygen' ? 'O₂' : '⛽', cx, cy + r + s(8));
+        _ctx.textBaseline = 'alphabetic';
+
+        // Parpadeo cuando está por desaparecer
+        if (this.lifetime < 2.5 && Math.sin(time * 10) > 0) {
+            _ctx.beginPath();
+            _ctx.arc(cx, cy, r + s(3), 0, Math.PI * 2);
+            _ctx.strokeStyle = '#fff';
+            _ctx.lineWidth = s(1.5);
+            _ctx.stroke();
+        }
     }
 }
