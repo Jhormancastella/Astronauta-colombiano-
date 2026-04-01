@@ -2,7 +2,7 @@
 import { s, BASE_W, BASE_H, isMobile } from './utils.js';
 import * as Utils from './utils.js';
 import { player } from './player.js';
-import { joystick, shootButton, getJoystickRadius } from './input.js';
+import { joystick, shootButton, getJoystickRadius, getFireButtonCenter, FIRE_BTN_RADIUS } from './input.js';
 
 let _ctx = null;
 let _gameTime = () => 0;
@@ -108,43 +108,57 @@ function drawBar(x, y, w, h, value, max, color, bgColor, label) {
 }
 
 export function drawJoystick() {
-    if (!isMobile) return;
+    if (!Utils.isMobile) return;
 
+    const fireBtn = getFireButtonCenter();
+
+    // Zona joystick — indicador estático en reposo (lado izquierdo)
+    if (!joystick.active) {
+        _ctx.beginPath();
+        _ctx.arc(s(Utils.BASE_W * 0.22), s(Utils.BASE_H - 90), s(getJoystickRadius()), 0, Math.PI * 2);
+        _ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        _ctx.lineWidth = s(1.5);
+        _ctx.stroke();
+        _ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        _ctx.fill();
+    }
+
+    // Joystick activo
     if (joystick.active) {
         const JR = getJoystickRadius();
+        // Anillo exterior
         _ctx.beginPath();
         _ctx.arc(s(joystick.startX), s(joystick.startY), s(JR), 0, Math.PI * 2);
-        _ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        _ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         _ctx.lineWidth = s(2);
         _ctx.stroke();
-        _ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        _ctx.fillStyle = 'rgba(255,255,255,0.05)';
         _ctx.fill();
-
+        // Knob
         _ctx.beginPath();
         _ctx.arc(s(joystick.startX + joystick.dx), s(joystick.startY + joystick.dy),
-            s(18), 0, Math.PI * 2);
-        _ctx.fillStyle = 'rgba(255,255,255,0.35)';
+            s(20), 0, Math.PI * 2);
+        _ctx.fillStyle = 'rgba(255,255,255,0.4)';
         _ctx.fill();
-        _ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        _ctx.strokeStyle = 'rgba(255,255,255,0.7)';
         _ctx.lineWidth = s(1.5);
         _ctx.stroke();
     }
 
-    // Botón FIRE
-    const bx = BASE_W - 55, by = BASE_H - 75;
+    // Botón FIRE — siempre visible
     _ctx.beginPath();
-    _ctx.arc(s(bx), s(by), s(30), 0, Math.PI * 2);
-    _ctx.fillStyle = shootButton.active ? 'rgba(255,80,80,0.4)' : 'rgba(255,255,255,0.08)';
+    _ctx.arc(s(fireBtn.x), s(fireBtn.y), s(30), 0, Math.PI * 2);
+    _ctx.fillStyle = shootButton.active ? 'rgba(255,80,80,0.45)' : 'rgba(255,255,255,0.08)';
     _ctx.fill();
-    _ctx.strokeStyle = shootButton.active ? 'rgba(255,100,100,0.8)' : 'rgba(255,255,255,0.25)';
+    _ctx.strokeStyle = shootButton.active ? 'rgba(255,100,100,0.9)' : 'rgba(255,255,255,0.28)';
     _ctx.lineWidth = s(2);
     _ctx.stroke();
 
-    _ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    _ctx.fillStyle = shootButton.active ? '#fff' : 'rgba(255,255,255,0.6)';
     _ctx.font = `bold ${s(11)}px Courier New`;
     _ctx.textAlign = 'center';
     _ctx.textBaseline = 'middle';
-    _ctx.fillText('FIRE', s(bx), s(by));
+    _ctx.fillText('FIRE', s(fireBtn.x), s(fireBtn.y));
     _ctx.textBaseline = 'alphabetic';
 }
 
@@ -162,6 +176,23 @@ export function drawVignette() {
 // Zonas táctiles de la pausa (en coordenadas BASE)
 export const PAUSE_BTN_CONTINUE = { x: 50, y: BASE_H / 2 - 30, w: BASE_W - 100, h: 44 };
 export const PAUSE_BTN_EXIT     = { x: 50, y: BASE_H / 2 + 28, w: BASE_W - 100, h: 44 };
+
+// Botón de pausa en juego (móvil) — esquina superior derecha
+export const PAUSE_INGAME_BTN = { x: BASE_W - 38, y: 6, w: 32, h: 32 };
+
+export function drawPauseButton() {
+    if (!Utils.isMobile) return;
+    const b = PAUSE_INGAME_BTN;
+    _ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    _ctx.fillRect(s(b.x), s(b.y), s(b.w), s(b.h));
+    _ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    _ctx.lineWidth = s(1);
+    _ctx.strokeRect(s(b.x), s(b.y), s(b.w), s(b.h));
+    // Icono ❚❚
+    _ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    _ctx.fillRect(s(b.x + 9),  s(b.y + 9), s(5), s(14));
+    _ctx.fillRect(s(b.x + 18), s(b.y + 9), s(5), s(14));
+}
 
 export function drawPause(time) {
     _ctx.fillStyle = 'rgba(0,0,0,0.75)';

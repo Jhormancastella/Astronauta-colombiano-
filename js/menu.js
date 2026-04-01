@@ -88,87 +88,90 @@ export function menuClick(cx, cy) {
 }
 
 function _clickMain(cx, cy) {
+    // Items dibujados en startY=355, itemH=44, zona de toque ±22px vertical
     const startY = 355, itemH = 44;
     for (let i = 0; i < MAIN_ITEMS.length; i++) {
         const iy = startY + i * itemH;
-        if (cy >= iy - 20 && cy <= iy + 20 && cx >= 40 && cx <= BASE_W - 40) {
+        if (cy >= iy - 22 && cy <= iy + 22) {
             selectedIndex = i; menuConfirm(); return;
         }
     }
 }
+
 function _clickNewGame(cx, cy) {
+    // Items dibujados en startY=300, itemH=56, zona de toque ±26px vertical
     const startY = 300, itemH = 56;
     for (let i = 0; i < NEWGAME_ITEMS.length; i++) {
         const iy = startY + i * itemH;
-        if (cy >= iy - 20 && cy <= iy + 20 && cx >= 40 && cx <= BASE_W - 40) {
+        if (cy >= iy - 26 && cy <= iy + 26) {
             selectedIndex = i; menuConfirm(); return;
         }
     }
 }
+
 function _clickOptions(cx, cy) {
-    // ---- TABS (dibujadas en y=128, h=28) ----
+    // ---- TABS (y=128, h=28) ----
     const tabW = BASE_W / OPT_TABS.length;
-    if (cy >= 128 && cy <= 156) {
+    if (cy >= 120 && cy <= 164) {
         const t = Math.floor(cx / tabW);
         if (t >= 0 && t < OPT_TABS.length) { optionsTab = t; return; }
     }
 
-    // contentY = 175 (igual que en _drawOptions)
     const Y = 175;
-    const L = 30, R = BASE_W - 30, barW = R - L;
-    const bw3 = (barW - 8) / 3; // ancho de cada botón en grupos de 3
+    const L = 30, R = BASE_W - 30;
+    const barW = R - L;
+    const bw3 = (barW - 8) / 3;
 
     if (optionsTab === 0) { // ---- AUDIO ----
-        // _slider dibuja label en Y, barra en Y+8 con h=8
-        if (cy >= Y + 6 && cy <= Y + 22 && cx >= L && cx <= R) {
+        // Slider SFX: barra en Y+12, h=8, thumb radio=6 → zona Y+6 a Y+26
+        if (cy >= Y + 4 && cy <= Y + 28 && cx >= L && cx <= R) {
             setSFXVolume(Math.max(0, Math.min(1, (cx - L) / barW))); return;
         }
-        // Segunda barra en Y+60, barra en Y+68
-        if (cy >= Y + 66 && cy <= Y + 82 && cx >= L && cx <= R) {
+        // Slider Música: barra en Y+72, h=8 → zona Y+66 a Y+86
+        if (cy >= Y + 64 && cy <= Y + 88 && cx >= L && cx <= R) {
             setMusicVolume(Math.max(0, Math.min(1, (cx - L) / barW))); return;
         }
-        // _toggle en Y+130: el toggle rect está en y-13 a y+5 → Y+117 a Y+135
-        if (cy >= Y + 115 && cy <= Y + 138) { toggleMute(); return; }
+        // Toggle mute: dibujado en y=Y+130, rect toggle en Y+117 a Y+135 → zona amplia
+        if (cy >= Y + 110 && cy <= Y + 145) { toggleMute(); return; }
     }
 
     if (optionsTab === 1) { // ---- DIFICULTAD ----
-        // _multiBtn(DIFF_LABELS, DIFF_COLORS, _diff, Y+12, 36)
-        // → rect en Y+12, altura 36 → Y+12 a Y+48
+        // _multiBtn en Y+12, h=36 → zona Y+8 a Y+52
         for (let i = 0; i < 3; i++) {
             const bx = L + i * (bw3 + 4);
-            if (cy >= Y + 12 && cy <= Y + 48 && cx >= bx && cx <= bx + bw3) {
+            if (cy >= Y + 8 && cy <= Y + 52 && cx >= bx && cx <= bx + bw3) {
                 _diff = i; localStorage.setItem('difficulty', i); return;
             }
         }
     }
 
     if (optionsTab === 2) { // ---- GRÁFICOS ----
-        // Calidad: _multiBtn en Y+12, h=34 → Y+12 a Y+46
+        // Calidad: _multiBtn en Y+12, h=34 → zona Y+8 a Y+50
         for (let i = 0; i < 3; i++) {
             const bx = L + i * (bw3 + 4);
-            if (cy >= Y + 12 && cy <= Y + 46 && cx >= bx && cx <= bx + bw3) {
+            if (cy >= Y + 8 && cy <= Y + 50 && cx >= bx && cx <= bx + bw3) {
                 _quality = i; localStorage.setItem('gfxQuality', i); return;
             }
         }
-        // Partículas: _multiBtn en Y+80, h=34 → Y+80 a Y+114
+        // Partículas: _multiBtn en Y+80, h=34 → zona Y+76 a Y+118
         for (let i = 0; i < 3; i++) {
             const bx = L + i * (bw3 + 4);
-            if (cy >= Y + 80 && cy <= Y + 114 && cx >= bx && cx <= bx + bw3) {
+            if (cy >= Y + 76 && cy <= Y + 118 && cx >= bx && cx <= bx + bw3) {
                 _particles = i; localStorage.setItem('particles', i); return;
             }
         }
-        // Shake toggle: _toggle en Y+148 → rect en Y+135 a Y+153
-        if (cy >= Y + 133 && cy <= Y + 155) {
+        // Shake toggle: dibujado en y=Y+148 → zona Y+132 a Y+158
+        if (cy >= Y + 130 && cy <= Y + 160) {
             _shake = !_shake; localStorage.setItem('screenShake', _shake); return;
         }
-        // Vignette toggle: _toggle en Y+178 → rect en Y+163 a Y+183
-        if (cy >= Y + 163 && cy <= Y + 185) {
+        // Vignette toggle: dibujado en y=Y+178 → zona Y+162 a Y+190
+        if (cy >= Y + 160 && cy <= Y + 192) {
             _vignette = !_vignette; localStorage.setItem('vignette', _vignette); return;
         }
     }
 
     // ---- VOLVER (dibujado en BASE_H - 52) ----
-    if (cy >= BASE_H - 68 && cy <= BASE_H - 36) {
+    if (cy >= BASE_H - 72 && cy <= BASE_H - 32) {
         menuState = MENU.MAIN; selectedIndex = 0;
     }
 }

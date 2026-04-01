@@ -5,11 +5,11 @@ import * as Utils from './utils.js';
 import { loadAllSounds, playSFX, playMusic, stopMusic, resumeCtx } from './audio.js';
 import { keys, shooting, joystick, getJoystickRadius, initInput, onAction } from './input.js';
 import { initParticles, spawnExplosion, spawnTrail, updateParticles, drawParticles, clearParticles } from './particles.js';
-import { Star, Bullet, Fragment, Warning, Pickup, initEntities, setDifficultyRef } from './entities.js';
+import { Star, Bullet, Fragment, Warning, Pickup, SupplyDrop, initEntities, setDifficultyRef } from './entities.js';
 import { player, resetPlayer, damagePlayer, killByOxygen, killByFuel,
          updatePlayerDeath, drawPlayer, initPlayer, onPlayerDeath, onPlayerDamage } from './player.js';
 import { initRenderer, drawBackground, drawHUD, drawJoystick, drawVignette, drawPause, drawGameOver,
-         drawWeaponHUD, drawUpgradeNotif, PAUSE_BTN_CONTINUE, PAUSE_BTN_EXIT } from './renderer.js';
+         drawWeaponHUD, drawUpgradeNotif, drawPauseButton, PAUSE_BTN_CONTINUE, PAUSE_BTN_EXIT, PAUSE_INGAME_BTN } from './renderer.js';
 import { initMenu, drawMenu, menuUp, menuDown, menuConfirm, menuBack, menuClick,
          onMenuAction, getMenuState, setMenuState, MENU, getSelectedDifficulty,
          getScreenShake, getVignette, getParticleLevel } from './menu.js';
@@ -56,8 +56,9 @@ let difficultyLevel = 1;
 
 // ---- ENTITIES ----
 const stars = Array.from({ length: 60 }, () => new Star());
-let fragments = [], bullets = [], pickups = [], warnings = [];
+let fragments = [], bullets = [], pickups = [], warnings = [], supplyDrops = [];
 let fragmentTimer = 0;
+let supplyDropTimer = 0;
 
 // ---- SCREEN FX ----
 let shakeAmount = 0, shakeDuration = 0;
@@ -93,8 +94,9 @@ function getDifficulty() {
 function startGame() {
     gameState = STATE.PLAYING;
     gameTime = 0; score = 0; difficultyLevel = 1;
-    fragments = []; bullets = []; pickups = []; warnings = [];
+    fragments = []; bullets = []; pickups = []; warnings = []; supplyDrops = [];
     fragmentTimer = 0;
+    supplyDropTimer = 0;
     upgradeNotif.timer = 0;
     clearParticles();
     resetPlayer();
@@ -134,31 +136,36 @@ onAction(action => {
     resumeCtx();
 
     if (typeof action === 'object') {
-        // Touch / click
+        // Touch / click — pos ya viene en coordenadas lógicas desde input.js
         if (action.type === 'touch' || action.type === 'click') {
-            const pos = action.type === 'click'
-                ? (() => { const r = canvas.getBoundingClientRect(); return { x: (action.x - r.left) / (SCALE || 1), y: (action.y - r.top) / (SCALE || 1) }; })()
-                : action.pos;
+            const pos = action.pos;
 
             if (gameState === STATE.MENU)     { menuClick(pos.x, pos.y); return; }
             if (gameState === STATE.STORY)    { storyAdvance(); return; }
             if (gameState === STATE.GAMEOVER) { startGame(); return; }
 
+            // Botón pausa en juego (móvil)
+            if (gameState === STATE.PLAYING) {
+                const pb = PAUSE_INGAME_BTN;
+                if (pos.x >= pb.x && pos.x <= pb.x + pb.w &&
+                    pos.y >= pb.y && pos.y <= pb.y + pb.h) {
+                    gameState = STATE.PAUSED; return;
+                }
+            }
+
             if (gameState === STATE.PAUSED) {
-                // Botón CONTINUAR
                 const bc = PAUSE_BTN_CONTINUE;
                 if (pos.x >= bc.x && pos.x <= bc.x + bc.w &&
                     pos.y >= bc.y && pos.y <= bc.y + bc.h) {
                     gameState = STATE.PLAYING; return;
                 }
-                // Botón SALIR AL MENÚ
                 const be = PAUSE_BTN_EXIT;
                 if (pos.x >= be.x && pos.x <= be.x + be.w &&
                     pos.y >= be.y && pos.y <= be.y + be.h) {
                     goToMenu(); return;
                 }
-                // Tap fuera de botones → continuar (comportamiento anterior)
-                gameState = STATE.PLAYING;
+                // En móvil no cerrar pausa con tap fuera de botones
+                if (!Utils.isMobile) gameState = STATE.PLAYING;
                 return;
             }
         }
@@ -223,12 +230,21 @@ function dropPickup(x, y) {
 }
 
 function collectPickup(p) {
-    if (p.type === 'oxygen') player.oxygen = Math.min(player.maxOxygen, player.oxygen + 25);
-    else if (p.type === 'fuel') player.fuel = Math.min(player.maxFuel, player.fuel + 20);
+    if (p.type === 'oxygen') player.oxygen = Math.min(player.maxOxygen, player.oxygen + 12);
+    else if (p.type === 'fuel') player.fuel = Math.min(player.maxFuel, player.fuel + 10);
     else player.health = Math.min(player.maxHealth, player.health + 15);
     spawnExplosion(p.x, p.y, p.type === 'oxygen' ? '#4488ff' : p.type === 'fuel' ? '#44dd66' : '#ff4466', 8, 40);
     p.alive = false;
     score += 50;
+    playSFX('pickup');
+}
+
+function collectSupplyDrop(sd) {
+    if (sd.type === 'oxygen') player.oxygen = Math.min(player.maxOxygen, player.oxygen + sd.amount);
+    else player.fuel = Math.min(player.maxFuel, player.fuel + sd.amount);
+    spawnExplosion(sd.x + sd.w / 2, sd.y + sd.h / 2, sd.type === 'oxygen' ? '#4488ff' : '#44dd66', 14, 60);
+    sd.alive = false;
+    score += 150;
     playSFX('pickup');
 }
 
@@ -334,6 +350,14 @@ function update(dt) {
         fragmentTimer = diff.fragmentInterval;
     }
 
+    // Spawn supply drops (oxygen tank / fuel canister grandes)
+    supplyDropTimer -= dt;
+    if (supplyDropTimer <= 0) {
+        const type = Math.random() < 0.5 ? 'oxygen' : 'fuel';
+        supplyDrops.push(new SupplyDrop(type));
+        supplyDropTimer = 18 - Math.min(difficultyLevel * 0.5, 8); // más frecuente con dificultad
+    }
+
     // Fragment collisions
     for (const f of fragments) {
         f.update(dt);
@@ -385,6 +409,16 @@ function update(dt) {
         }
     }
 
+    // Supply drops
+    for (const sd of supplyDrops) {
+        sd.update(dt);
+        if (sd.alive) {
+            const pd = Math.hypot((player.x + player.w / 2) - (sd.x + sd.w / 2),
+                                  (player.y + player.h / 2) - (sd.y + sd.h / 2));
+            if (pd < sd.w / 2 + 12) collectSupplyDrop(sd);
+        }
+    }
+
     for (const w of warnings) w.update(dt);
     updateParticles(dt);
     for (const st of stars) st.update(dt);
@@ -395,6 +429,7 @@ function update(dt) {
     fragments = fragments.filter(f => f.alive);
     bullets = bullets.filter(b => b.alive);
     pickups = pickups.filter(p => p.alive);
+    supplyDrops = supplyDrops.filter(sd => sd.alive);
     warnings = warnings.filter(w => w.life > 0);
 }
 
@@ -427,6 +462,7 @@ function draw(time) {
     for (const f of fragments) f.draw();
     for (const b of bullets) b.draw();
     for (const p of pickups) p.draw(time);
+    for (const sd of supplyDrops) sd.draw(time);
     for (const w of warnings) w.draw(time);
     drawPlayer(time);
 
@@ -444,6 +480,7 @@ function draw(time) {
     drawWeaponHUD(getWeaponName(), getWeaponColor(), gameTime, getSelectedDifficulty(), getUnlockTimes);
     drawUpgradeNotif(upgradeNotif, time);
     drawJoystick();
+    drawPauseButton();
 
     if (gameState === STATE.PAUSED) drawPause(time);
     if (gameState === STATE.GAMEOVER) drawGameOver(time, score, highScore, gameTime, difficultyLevel, player.deathCause);
@@ -466,6 +503,8 @@ async function boot() {
         loadSprite('player', 'img/Ast.png'),
         loadSprite('explosion', 'img/Astexp.png'),
         loadSprite('textures', 'img/texpreview.png'),
+        loadSprite('oxygenTank', 'img/oxygen-tank.avif'),
+        loadSprite('fuelCanister', 'img/combustible.jpg'),
         loadAllSounds(),
     ]);
     playMusic('menu');

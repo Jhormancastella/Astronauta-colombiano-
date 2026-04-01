@@ -11,19 +11,29 @@ export function getJoystickRadius() {
     return Math.max(50, Math.round(Utils.BASE_W * 0.12));
 }
 
+// Zona del botón FIRE (coordenadas lógicas, sincronizado con renderer.js)
+export function getFireButtonCenter() {
+    return { x: Utils.BASE_W - 55, y: Utils.BASE_H - 75 };
+}
+export const FIRE_BTN_RADIUS = 38; // zona de toque más grande que el visual (30)
+
 const listeners = { onAction: null };
 export function onAction(fn) { listeners.onAction = fn; }
 function fireAction(name) { if (listeners.onAction) listeners.onAction(name); }
 
 function getCanvasPos(canvas, tx, ty) {
     const rect = canvas.getBoundingClientRect();
+    // Convertir de píxeles de pantalla a coordenadas lógicas del juego
+    const scaleX = Utils.BASE_W / rect.width;
+    const scaleY = Utils.BASE_H / rect.height;
     return {
-        x: (tx - rect.left) / Utils.SCALE,
-        y: (ty - rect.top)  / Utils.SCALE,
+        x: (tx - rect.left) * scaleX,
+        y: (ty - rect.top)  * scaleY,
     };
 }
 
 export function initInput(canvas) {
+    // ---- TECLADO ----
     document.addEventListener('keydown', e => {
         keys[e.code] = true;
         if (e.code === 'Space')  { e.preventDefault(); shooting = true; }
@@ -40,19 +50,30 @@ export function initInput(canvas) {
         if (e.code === 'Space') shooting = false;
     });
 
+    // ---- TOUCH ----
     canvas.addEventListener('touchstart', e => {
         e.preventDefault();
         for (const touch of e.changedTouches) {
             const pos = getCanvasPos(canvas, touch.clientX, touch.clientY);
+
+            // Siempre disparar acción de toque (para menús, game over, etc.)
             fireAction({ type: 'touch', pos, id: touch.identifier });
 
-            if (pos.x < Utils.BASE_W * 0.55 && joystick.id === -1) {
-                Object.assign(joystick, { active: true, id: touch.identifier,
-                    startX: pos.x, startY: pos.y, dx: 0, dy: 0 });
-            } else if (pos.x >= Utils.BASE_W * 0.55) {
+            // Solo asignar controles de juego si no hay joystick activo en lado izquierdo
+            const fireBtn = getFireButtonCenter();
+            const distFire = Math.hypot(pos.x - fireBtn.x, pos.y - fireBtn.y);
+
+            if (distFire <= FIRE_BTN_RADIUS) {
+                // Toque en zona FIRE
                 shootButton.active = true;
                 shootButton.id = touch.identifier;
                 shooting = true;
+            } else if (pos.x < Utils.BASE_W * 0.6 && joystick.id === -1) {
+                // Toque en zona izquierda → joystick
+                Object.assign(joystick, {
+                    active: true, id: touch.identifier,
+                    startX: pos.x, startY: pos.y, dx: 0, dy: 0,
+                });
             }
         }
     }, { passive: false });
@@ -86,8 +107,24 @@ export function initInput(canvas) {
         }
     }, { passive: false });
 
+    canvas.addEventListener('touchcancel', e => {
+        e.preventDefault();
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === joystick.id) {
+                Object.assign(joystick, { active: false, id: -1, dx: 0, dy: 0 });
+            }
+            if (touch.identifier === shootButton.id) {
+                shootButton.active = false;
+                shootButton.id = -1;
+                shooting = false;
+            }
+        }
+    }, { passive: false });
+
+    // ---- MOUSE (desktop) ----
     canvas.addEventListener('mousedown', e => {
-        fireAction({ type: 'click', x: e.clientX, y: e.clientY });
+        const pos = getCanvasPos(canvas, e.clientX, e.clientY);
+        fireAction({ type: 'click', pos, x: e.clientX, y: e.clientY });
     });
 
     if (!Utils.isMobile) canvas.style.cursor = 'crosshair';
