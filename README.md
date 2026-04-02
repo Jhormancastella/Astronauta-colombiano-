@@ -1,2 +1,2 @@
-# Astronauta-colombiano-
+# Astronauta colombiano
 Juego de astronauta 

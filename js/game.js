@@ -2,17 +2,18 @@
 import { recalcLayout, calcPlayerSize, setSize, setMobile, detectMobile,
          s, rand, clamp, rectCollision, loadSprite } from './utils.js';
 import * as Utils from './utils.js';
+import { getLang } from './i18n.js';
 import { loadAllSounds, playSFX, playMusic, stopMusic, resumeCtx } from './audio.js';
 import { keys, shooting, joystick, getJoystickRadius, initInput, onAction } from './input.js';
 import { initParticles, spawnExplosion, spawnTrail, updateParticles, drawParticles, clearParticles } from './particles.js';
-import { Star, Bullet, Fragment, Warning, Pickup, SupplyDrop, initEntities, setDifficultyRef } from './entities.js';
+import { Star, Bullet, Fragment, Warning, Pickup, SupplyDrop, BlackHole, SolarStorm, Checkpoint, initEntities, setDifficultyRef } from './entities.js';
 import { player, resetPlayer, damagePlayer, killByOxygen, killByFuel,
          updatePlayerDeath, drawPlayer, initPlayer, onPlayerDeath, onPlayerDamage } from './player.js';
 import { initRenderer, drawBackground, drawHUD, drawJoystick, drawVignette, drawPause, drawGameOver,
-         drawWeaponHUD, drawUpgradeNotif, drawPauseButton, PAUSE_BTN_CONTINUE, PAUSE_BTN_EXIT, PAUSE_INGAME_BTN } from './renderer.js';
+         drawWeaponHUD, drawUpgradeNotif, drawPauseButton, PAUSE_BTN_CONTINUE, PAUSE_BTN_OPTIONS, PAUSE_BTN_EXIT, PAUSE_INGAME_BTN } from './renderer.js';
 import { initMenu, drawMenu, menuUp, menuDown, menuConfirm, menuBack, menuClick,
          onMenuAction, getMenuState, setMenuState, MENU, getSelectedDifficulty,
-         getScreenShake, getVignette, getParticleLevel } from './menu.js';
+         getScreenShake, getVignette, getParticleLevel, setReturnToPause } from './menu.js';
 import { initStory, startStory, updateStory, drawStory, storyAdvance, storySkip } from './story.js';
 import { updateWeapon, resetWeapon, getBullets, spawnMuzzleFlash,
          getWeaponName, getWeaponColor, getUnlockTimes, currentWeapon, onWeaponUpgrade, WEAPON } from './weapons.js';
@@ -46,6 +47,20 @@ initMenu(ctx);
 initStory(ctx);
 initInput(canvas);
 
+// Precargar imágenes de galería desde Cloudinary (URLs exactas)
+const GALLERY_DATA = [
+    { id: 'bg1', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099142/background-1_f7fgfn.png' },
+    { id: 'bg2', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099143/background-2_mrsyij.png' },
+    { id: 'bg3', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099139/background-3_njmh3b.png' },
+    { id: 'bg4', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099140/background-4_lrtcry.png' },
+    { id: 'bg5', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099139/background-5_hy8grj.png' },
+    { id: 'bg6', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099145/background-6_c5vxzj.png' },
+    { id: 'bg7', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099144/background-7_xhvhti.png' },
+    { id: 'bg8', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099136/background-8_lvlwnq.png' },
+    { id: 'bg9', url: 'https://res.cloudinary.com/dcqnjn6fe/image/upload/q_auto/f_auto/v1775099139/background-9_jhrux2.png' },
+];
+GALLERY_DATA.forEach(data => loadSprite(data.id, data.url));
+
 // ---- GAME STATE ----
 const STATE = { MENU: 'menu', STORY: 'story', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
 let gameState = STATE.MENU;
@@ -57,8 +72,13 @@ let difficultyLevel = 1;
 // ---- ENTITIES ----
 const stars = Array.from({ length: 60 }, () => new Star());
 let fragments = [], bullets = [], pickups = [], warnings = [], supplyDrops = [];
+let blackHoles = [], checkpoints = [];
+let solarStorm = null;
 let fragmentTimer = 0;
 let supplyDropTimer = 0;
+let blackHoleTimer = 0;
+let solarStormTimer = 0;
+let checkpointSpawned = false;
 
 // ---- SCREEN FX ----
 let shakeAmount = 0, shakeDuration = 0;
@@ -91,12 +111,25 @@ function getDifficulty() {
 }
 
 // ---- GAME ACTIONS ----
-function startGame() {
+function startGame(fromSave = false) {
     gameState = STATE.PLAYING;
-    gameTime = 0; score = 0; difficultyLevel = 1;
+    setReturnToPause(false);
+
+    if (fromSave) {
+        const save = JSON.parse(localStorage.getItem('astronautaColombiano_Checkpoint'));
+        score = save.score;
+        difficultyLevel = save.level;
+    } else {
+        gameTime = 0; score = 0; difficultyLevel = 1;
+    }
+
     fragments = []; bullets = []; pickups = []; warnings = []; supplyDrops = [];
+    blackHoles = []; checkpoints = []; solarStorm = null;
     fragmentTimer = 0;
     supplyDropTimer = 0;
+    blackHoleTimer = 30;
+    solarStormTimer = 60;
+    checkpointSpawned = false;
     upgradeNotif.timer = 0;
     clearParticles();
     resetPlayer();
@@ -108,6 +141,7 @@ function startGame() {
 
 function goToMenu() {
     gameState = STATE.MENU;
+    setReturnToPause(false);
     setMenuState(MENU.MAIN);
     stopMusic();
     playMusic('menu');
@@ -119,16 +153,24 @@ onPlayerDamage(() => { triggerShake(4, 0.3); triggerFlash('#ff0000', 0.25); play
 
 // ---- MENU CALLBACKS ----
 onMenuAction({
+    // Continuar desde checkpoint
+    continue: () => startGame(true),
     // Nueva partida → directo al juego
-    playDirect: () => startGame(),
+    play: () => startGame(false),
     // Nueva partida → ver historia → juego
-    storyThenPlay: () => {
+    story: () => {
         gameState = STATE.STORY;
+        setReturnToPause(false);
         stopMusic();
         startStory(() => {
-            startGame();
+            startGame(false);
         });
     },
+    // Regresar al juego desde opciones (cuando se abrió desde pausa)
+    backToPause: () => {
+        gameState = STATE.PAUSED;
+        setReturnToPause(false);
+    }
 });
 
 // ---- INPUT ACTIONS ----
@@ -150,22 +192,30 @@ onAction(action => {
             // Botón pausa en juego (móvil)
             if (gameState === STATE.PLAYING) {
                 const pb = PAUSE_INGAME_BTN;
-                if (pos.x >= pb.x && pos.x <= pb.x + pb.w &&
-                    pos.y >= pb.y && pos.y <= pb.y + pb.h) {
+                const dx = pos.x - (pb.x + pb.r);
+                const dy = pos.y - (pb.y + pb.r);
+                if (Math.hypot(dx, dy) <= pb.r + 5) { // +5 de margen de toque
                     gameState = STATE.PAUSED; return;
                 }
             }
 
             if (gameState === STATE.PAUSED) {
-                const bc = PAUSE_BTN_CONTINUE;
-                if (pos.x >= bc.x && pos.x <= bc.x + bc.w &&
-                    pos.y >= bc.y && pos.y <= bc.y + bc.h) {
-                    gameState = STATE.PLAYING; return;
-                }
-                const be = PAUSE_BTN_EXIT;
-                if (pos.x >= be.x && pos.x <= be.x + be.w &&
-                    pos.y >= be.y && pos.y <= be.y + be.h) {
-                    goToMenu(); return;
+                const bx = PAUSE_BTN_CONTINUE.x;
+                const bw = PAUSE_BTN_CONTINUE.w;
+                
+                if (pos.x >= bx && pos.x <= bx + bw) {
+                    if (pos.y >= PAUSE_BTN_CONTINUE.y && pos.y <= PAUSE_BTN_CONTINUE.y + PAUSE_BTN_CONTINUE.h) {
+                        gameState = STATE.PLAYING; return;
+                    }
+                    if (pos.y >= PAUSE_BTN_OPTIONS.y && pos.y <= PAUSE_BTN_OPTIONS.y + PAUSE_BTN_OPTIONS.h) {
+                        gameState = STATE.MENU;
+                        setReturnToPause(true);
+                        setMenuState(MENU.OPTIONS);
+                        return;
+                    }
+                    if (pos.y >= PAUSE_BTN_EXIT.y && pos.y <= PAUSE_BTN_EXIT.y + PAUSE_BTN_EXIT.h) {
+                        goToMenu(); return;
+                    }
                 }
                 // En móvil no cerrar pausa con tap fuera de botones
                 if (!Utils.isMobile) gameState = STATE.PLAYING;
@@ -181,6 +231,15 @@ onAction(action => {
         else if (gameState === STATE.STORY) storyAdvance();
         else if (gameState === STATE.GAMEOVER) startGame();
         else if (gameState === STATE.PAUSED) gameState = STATE.PLAYING;
+    }
+    // Nueva acción para abrir opciones desde teclado en pausa
+    if (action === 'options') {
+        if (gameState === STATE.PAUSED) {
+            gameState = STATE.MENU;
+            setReturnToPause(true);
+            setMenuState(MENU.OPTIONS);
+            return;
+        }
     }
     if (action === 'pause') {
         if (gameState === STATE.STORY)   { storySkip(); return; }
@@ -248,6 +307,27 @@ function collectSupplyDrop(sd) {
     spawnExplosion(sd.x + sd.w / 2, sd.y + sd.h / 2, sd.type === 'oxygen' ? '#4488ff' : '#44dd66', 14, 60);
     sd.alive = false;
     score += 150;
+    playSFX('pickup');
+}
+
+function collectCheckpoint(cp) {
+    // Guardar estado en localStorage
+    const saveData = {
+        level: cp.level,
+        score: score,
+        date: new Date().toISOString()
+    };
+    localStorage.setItem('astronautaColombiano_Checkpoint', JSON.stringify(saveData));
+    
+    // Notificación visual
+    upgradeNotif.text = '★ PUNTO DE CONTROL GUARDADO ★';
+    upgradeNotif.color = '#e8c840';
+    upgradeNotif.timer = 4.0;
+    
+    spawnExplosion(cp.x + cp.w / 2, cp.y + cp.h / 2, '#e8c840', 25, 100);
+    triggerFlash('#e8c840', 0.2);
+    cp.alive = false;
+    score += 500;
     playSFX('pickup');
 }
 
@@ -361,6 +441,63 @@ function update(dt) {
         supplyDropTimer = 18 - Math.min(difficultyLevel * 0.5, 8); // más frecuente con dificultad
     }
 
+    // Spawn Checkpoints (Reliquias) - Cada 5 niveles
+    if (difficultyLevel % 5 === 0 && !checkpointSpawned) {
+        checkpoints.push(new Checkpoint(difficultyLevel, Math.floor(Math.random() * 3)));
+        checkpointSpawned = true;
+    } else if (difficultyLevel % 5 !== 0) {
+        checkpointSpawned = false; // Reset para el siguiente múltiplo de 5
+    }
+
+    // Spawn Black Holes (Nuevo Enemigo)
+    blackHoleTimer -= dt;
+    if (blackHoleTimer <= 0 && difficultyLevel >= 3) {
+        blackHoles.push(new BlackHole());
+        blackHoleTimer = 25 - Math.min(difficultyLevel * 0.8, 12);
+    }
+
+    // Spawn Solar Storm (Evento Aleatorio)
+    solarStormTimer -= dt;
+    if (solarStormTimer <= 0 && !solarStorm && difficultyLevel >= 5) {
+        solarStorm = new SolarStorm();
+        triggerFlash('#ff6600', 0.4);
+        playSFX('hit'); // Sonido de alerta
+    }
+
+    // Black Hole collisions & update
+    for (const bh of blackHoles) {
+        const drain = bh.update(dt, player);
+        if (drain > 0 && player.alive) {
+            // Aplicar drenaje de vida (max 15 HP/s en el centro)
+            player.health -= bh.maxDrain * drain * dt;
+            if (Math.random() < 0.1) triggerFlash('#4400aa', 0.05); // Destello púrpura sutil
+            
+            if (player.health <= 0) {
+                player.health = 0;
+                damagePlayer(0, score, highScore, ns => { highScore = ns; localStorage.setItem('astronautaColombiano_HS', ns); });
+            }
+        }
+
+        if (bh.alive && player.alive) {
+            const dist = Math.hypot((player.x + player.w / 2) - (bh.x + bh.w / 2), (player.y + player.h / 2) - (bh.y + bh.h / 2));
+            if (dist < bh.w * 0.3) { // Daño por impacto directo en el núcleo
+                damagePlayer(15, score, highScore, ns => { highScore = ns; localStorage.setItem('astronautaColombiano_HS', ns); });
+                bh.alive = false;
+            }
+        }
+    }
+
+    // Solar Storm update
+    if (solarStorm) {
+        solarStorm.update(dt);
+        if (Math.random() < 0.05) triggerShake(2, 0.1);
+        player.oxygen -= dt * 2; // Drenaje extra de oxígeno durante la tormenta
+        if (!solarStorm.active) {
+            solarStorm = null;
+            solarStormTimer = 40 + Math.random() * 30;
+        }
+    }
+
     // Fragment collisions
     for (const f of fragments) {
         f.update(dt);
@@ -422,6 +559,16 @@ function update(dt) {
         }
     }
 
+    // Checkpoints (Reliquias)
+    for (const cp of checkpoints) {
+        cp.update(dt);
+        if (cp.alive) {
+            const pd = Math.hypot((player.x + player.w / 2) - (cp.x + cp.w / 2),
+                                  (player.y + player.h / 2) - (cp.y + cp.h / 2));
+            if (pd < cp.w / 2 + 15) collectCheckpoint(cp);
+        }
+    }
+
     for (const w of warnings) w.update(dt);
     updateParticles(dt);
     for (const st of stars) st.update(dt);
@@ -433,6 +580,8 @@ function update(dt) {
     bullets = bullets.filter(b => b.alive);
     pickups = pickups.filter(p => p.alive);
     supplyDrops = supplyDrops.filter(sd => sd.alive);
+    blackHoles = blackHoles.filter(bh => bh.alive);
+    checkpoints = checkpoints.filter(cp => cp.alive);
     warnings = warnings.filter(w => w.life > 0);
 }
 
@@ -461,8 +610,11 @@ function draw(time) {
     ctx.translate(s(shakeX), s(shakeY));
 
     drawBackground(time, stars);
+    if (solarStorm) solarStorm.draw();
     drawParticles();
     for (const f of fragments) f.draw();
+    for (const bh of blackHoles) bh.draw(time);
+    for (const cp of checkpoints) cp.draw(time);
     for (const b of bullets) b.draw();
     for (const p of pickups) p.draw(time);
     for (const sd of supplyDrops) sd.draw(time);
@@ -481,7 +633,7 @@ function draw(time) {
     if (getVignette()) drawVignette();
     drawHUD();
     drawWeaponHUD(getWeaponName(), getWeaponColor(), gameTime, getSelectedDifficulty(), getUnlockTimes);
-    drawUpgradeNotif(upgradeNotif, time);
+    drawUpgradeNotif(upgradeNotif);
     drawJoystick();
     drawPauseButton();
 

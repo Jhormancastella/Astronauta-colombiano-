@@ -1,4 +1,4 @@
-// --- ENTITIES: Fragment, Bullet, Pickup, Warning, Star ---
+// --- ENTITIES: Fragment, Bullet, Pickup, Warning, Star, BlackHole, SolarStorm, SupplyDrop, Checkpoint ---
 import { s, rand, sprites, getTextureCells } from './utils.js';
 import * as Utils from './utils.js';
 
@@ -19,6 +19,91 @@ export function initEntities(ctx) { _ctx = ctx; }
 let _difficultyLevel = 1;
 export function setDifficultyRef(ref) { _difficultyLevel = ref; }
 export function getDifficultyLevel() { return _difficultyLevel; }
+
+// ---- BLACK HOLE (Nuevo Enemigo) ----
+export class BlackHole {
+    constructor() {
+        this.w = rand(40, 60);
+        this.h = this.w;
+        this.x = rand(50, BW() - 50);
+        this.y = -100;
+        this.speed = rand(20, 40);
+        this.alive = true;
+        this.rot = 0;
+        this.pullRadius = 150;
+        this.pullForce = 80;
+        this.maxDrain = 15; // Daño máximo por segundo en el centro
+    }
+    update(dt, player) {
+        this.y += this.speed * dt;
+        this.rot -= dt * 3;
+        if (this.y > BH() + 100) this.alive = false;
+
+        // Atracción y Drenaje al jugador
+        const dx = (this.x + this.w / 2) - (player.x + player.w / 2);
+        const dy = (this.y + this.h / 2) - (player.y + player.h / 2);
+        const dist = Math.hypot(dx, dy);
+        
+        let drainFactor = 0;
+        if (dist < this.pullRadius && player.alive) {
+            const ratio = (1 - dist / this.pullRadius);
+            const force = ratio * this.pullForce;
+            player.x += (dx / dist) * force * dt;
+            player.y += (dy / dist) * force * dt;
+            
+            // Factor de drenaje: más cerca = más daño
+            drainFactor = ratio;
+        }
+        return drainFactor;
+    }
+    draw(time) {
+        const cx = s(this.x + this.w / 2);
+        const cy = s(this.y + this.h / 2);
+        const r = s(this.w / 2);
+        
+        _ctx.save();
+        _ctx.translate(cx, cy);
+        _ctx.rotate(this.rot);
+        
+        // Efecto visual de espiral
+        for (let i = 0; i < 3; i++) {
+            _ctx.rotate(Math.PI * 2 / 3);
+            const grad = _ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+            grad.addColorStop(0, '#000');
+            grad.addColorStop(0.5, '#40f');
+            grad.addColorStop(1, 'transparent');
+            _ctx.fillStyle = grad;
+            _ctx.beginPath();
+            _ctx.ellipse(0, 0, r, r * 0.4, 0, 0, Math.PI * 2);
+            _ctx.fill();
+        }
+        
+        // Núcleo negro
+        _ctx.fillStyle = '#000';
+        _ctx.beginPath();
+        _ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+        _ctx.fill();
+        _ctx.restore();
+    }
+}
+
+// ---- SOLAR STORM (Evento Aleatorio) ----
+export class SolarStorm {
+    constructor() {
+        this.duration = 5;
+        this.active = true;
+        this.alpha = 0;
+    }
+    update(dt) {
+        this.duration -= dt;
+        if (this.duration <= 0) this.active = false;
+        this.alpha = Math.min(0.3, this.alpha + dt);
+    }
+    draw() {
+        _ctx.fillStyle = `rgba(255, 100, 0, ${this.alpha * (0.5 + 0.5 * Math.random())})`;
+        _ctx.fillRect(0, 0, s(BW()), s(BH()));
+    }
+}
 
 // ---- STAR FIELD ----
 export class Star {
@@ -76,6 +161,73 @@ export class Bullet {
             _ctx.fillStyle = '#fff';
             _ctx.fillRect(s(this.x), s(this.y), s(this.w), s(this.h));
         }
+    }
+}
+
+// ---- CHECKPOINT (Reliquia de Astronauta) ----
+export class Checkpoint {
+    constructor(level, typeIndex = 0) {
+        this.level = level;
+        this.w = 24;
+        this.h = 24;
+        this.x = rand(40, BW() - 40);
+        this.y = -50;
+        this.speed = rand(25, 35);
+        this.alive = true;
+        this.rot = 0;
+        this.rotSpeed = rand(-1, 1);
+        this.typeIndex = typeIndex; // 0=Casco, 1=Brazo, 2=Pierna
+        this.glowTime = 0;
+    }
+    update(dt) {
+        this.y += this.speed * dt;
+        this.rot += this.rotSpeed * dt;
+        if (this.y > BH() + 50) this.alive = false;
+    }
+    draw(time) {
+        const cx = s(this.x + this.w / 2);
+        const cy = s(this.y + this.h / 2);
+        const r = s(this.w / 2);
+
+        // Brillo místico (dorado/celeste)
+        const glowPulse = 0.5 + 0.5 * Math.sin(time * 5);
+        _ctx.save();
+        _ctx.translate(cx, cy);
+        _ctx.rotate(this.rot);
+
+        // Halo de luz
+        const grad = _ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2);
+        grad.addColorStop(0, `rgba(232, 200, 64, ${0.4 * glowPulse})`);
+        grad.addColorStop(1, 'transparent');
+        _ctx.fillStyle = grad;
+        _ctx.beginPath();
+        _ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
+        _ctx.fill();
+
+        // Representación visual (usando partes del sprite del jugador si existe)
+        if (sprites.player) {
+            _ctx.globalAlpha = 0.8;
+            // Dibujamos solo una parte del sprite (ej. el casco) con un tinte dorado
+            _ctx.drawImage(sprites.player, 0, 0, 32, 32, -r, -r, r * 2, r * 2);
+            _ctx.fillStyle = 'rgba(232, 200, 64, 0.4)';
+            _ctx.globalCompositeOperation = 'source-atop';
+            _ctx.fillRect(-r, -r, r * 2, r * 2);
+            _ctx.globalCompositeOperation = 'source-over';
+            _ctx.globalAlpha = 1;
+        } else {
+            // Fallback: un círculo brillante
+            _ctx.fillStyle = '#e8c840';
+            _ctx.beginPath();
+            _ctx.arc(0, 0, r, 0, Math.PI * 2);
+            _ctx.fill();
+        }
+
+        // Borde fino brillante
+        _ctx.strokeStyle = '#fff';
+        _ctx.lineWidth = s(1);
+        _ctx.strokeRect(-r, -r, r * 2, r * 2);
+        
+        _ctx.restore();
     }
 }
 

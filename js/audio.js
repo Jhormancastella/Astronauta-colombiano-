@@ -20,6 +20,7 @@ let masterGain  = null;
 
 const CACHE_NAME = 'astronauta-colombiano-audio-v1';
 
+// Solo crear AudioContext tras gesto del usuario (llamado desde resumeCtx)
 function initCtx() {
     if (ctx) return;
     ctx = new AC();
@@ -36,33 +37,42 @@ function initCtx() {
 
 async function loadSound(key, src) {
     try {
-        initCtx();
-
         let arrayBuffer;
-
-        // Intentar obtener desde Cache API primero
         if ('caches' in window) {
             const cache = await caches.open(CACHE_NAME);
             let cached = await cache.match(src);
-
             if (!cached) {
-                // No está en caché — descargar y guardar
                 const res = await fetch(src);
                 if (!res.ok) return;
                 await cache.put(src, res.clone());
                 cached = res;
             }
-
             arrayBuffer = await cached.arrayBuffer();
         } else {
-            // Fallback sin Cache API
             const res = await fetch(src);
             if (!res.ok) return;
             arrayBuffer = await res.arrayBuffer();
         }
-
-        buffers[key] = await ctx.decodeAudioData(arrayBuffer);
+        // Decodificar solo si ya hay contexto (tras gesto del usuario)
+        if (ctx) {
+            buffers[key] = await ctx.decodeAudioData(arrayBuffer);
+        } else {
+            // Guardar el buffer crudo para decodificar después
+            buffers[`_raw_${key}`] = arrayBuffer;
+        }
     } catch (_) { /* silently skip */ }
+}
+
+// Decodifica buffers crudos pendientes tras crear el contexto
+async function _decodePending() {
+    for (const k of Object.keys(buffers)) {
+        if (!k.startsWith('_raw_')) continue;
+        const key = k.slice(5);
+        try {
+            buffers[key] = await ctx.decodeAudioData(buffers[k]);
+        } catch (_) {}
+        delete buffers[k];
+    }
 }
 
 export async function loadAllSounds() {
@@ -80,7 +90,6 @@ export async function loadAllSounds() {
     );
 }
 
-// Limpia el caché de audio (útil si actualizas los archivos)
 export async function clearAudioCache() {
     if ('caches' in window) await caches.delete(CACHE_NAME);
 }
@@ -111,8 +120,12 @@ export function stopMusic() {
     }
 }
 
-export function resumeCtx() {
-    if (ctx && ctx.state === 'suspended') ctx.resume();
+export async function resumeCtx() {
+    if (!ctx) {
+        initCtx();
+        await _decodePending();
+    }
+    if (ctx.state === 'suspended') await ctx.resume();
 }
 
 export function setSFXVolume(v) {

@@ -2,6 +2,7 @@
 // 5 slides con efecto typewriter. Avanzar: Space/tap. Saltar: ESC.
 import { s, sprites } from './utils.js';
 import * as Utils from './utils.js';
+import { t } from './i18n.js';
 
 let _ctx = null;
 export function initStory(ctx) { _ctx = ctx; }
@@ -38,6 +39,12 @@ const SLIDES = [
         text: "Buena suerte, astronauta.\nEl universo no perdona\na los que dudan.",
         accent: '#ffffff',
     },
+    {
+        bg: ['#020510', '#050a18'],
+        spriteXR: 0.5, spriteYR: 0.32, spriteFloat: false,
+        text: '_controls_', // especial: se dibuja dinámico
+        accent: '#e8c840',
+    },
 ];
 
 const TYPEWRITER_SPEED = 0.03; // segundos por carácter
@@ -58,11 +65,10 @@ export function startStory(callback) {
 
 export function storyAdvance() {
     if (slideIndex >= SLIDES.length) return;
-    const totalChars = SLIDES[slideIndex].text.replace(/\n/g, '').length;
-    // Si el texto no terminó, completarlo primero
-    if (typewriterPos < totalChars) {
-        typewriterPos = totalChars;
-        return;
+    const slide = SLIDES[slideIndex];
+    if (slide.text !== '_controls_') {
+        const totalChars = slide.text.replace(/\n/g, '').length;
+        if (typewriterPos < totalChars) { typewriterPos = totalChars; return; }
     }
     slideIndex++;
     slideTime = typewriterPos = typewriterTimer = 0;
@@ -76,7 +82,9 @@ export function storySkip() {
 export function updateStory(dt) {
     if (slideIndex >= SLIDES.length) return;
     slideTime += dt;
-    const totalChars = SLIDES[slideIndex].text.replace(/\n/g, '').length;
+    const slide = SLIDES[slideIndex];
+    if (slide.text === '_controls_') return; // slide estático
+    const totalChars = slide.text.replace(/\n/g, '').length;
     if (typewriterPos < totalChars) {
         typewriterTimer += dt;
         while (typewriterTimer >= TYPEWRITER_SPEED && typewriterPos < totalChars) {
@@ -133,18 +141,43 @@ export function drawStory(time) {
     _ctx.lineWidth = s(1.5);
     _ctx.strokeRect(s(boxX), s(boxY), s(boxW), s(boxH));
 
-    // Texto typewriter — recorre líneas contando caracteres correctamente
-    _ctx.fillStyle = '#fff';
-    _ctx.font = `${s(9)}px Courier New`;
-    _ctx.textAlign = 'left';
-    _ctx.textBaseline = 'top';
-    const lines = slide.text.split('\n');
-    let shown = 0;
-    for (let li = 0; li < lines.length; li++) {
-        const line = lines[li];
-        const visible = line.slice(0, Math.max(0, typewriterPos - shown));
-        shown += line.length;
-        _ctx.fillText(visible, s(boxX + 10), s(boxY + 12 + li * 14));
+    if (slide.text === '_controls_') {
+        // Slide especial: guía de controles
+        _ctx.fillStyle = '#e8c840';
+        _ctx.font = `bold ${s(9)}px Courier New`;
+        _ctx.textAlign = 'center';
+        _ctx.textBaseline = 'top';
+        _ctx.fillText(t('storyControls'), s(BW / 2), s(boxY + 10));
+        const isMob = Utils.isMobile;
+        const pairs = isMob
+            ? [[t('ctrlMove'), t('ctrlMoveM')], [t('ctrlShoot'), t('ctrlShootM')], [t('ctrlPause'), t('ctrlPauseM')]]
+            : [[t('ctrlMove'), 'WASD / Arrows'], [t('ctrlShoot'), 'Space'], [t('ctrlPause'), 'P'], [t('ctrlMenu'), 'Esc']];
+        pairs.forEach(([a, k], i) => {
+            const py = boxY + 28 + i * 18;
+            _ctx.fillStyle = '#888';
+            _ctx.font = `${s(8)}px Courier New`;
+            _ctx.textAlign = 'left';
+            _ctx.fillText(a, s(boxX + 10), s(py));
+            _ctx.fillStyle = '#e8c840';
+            _ctx.font = `bold ${s(8)}px Courier New`;
+            _ctx.textAlign = 'right';
+            _ctx.fillText(k, s(boxX + boxW - 10), s(py));
+        });
+        typewriterPos = 999; // marcar como completo
+    } else {
+        // Texto typewriter normal
+        _ctx.fillStyle = '#fff';
+        _ctx.font = `${s(9)}px Courier New`;
+        _ctx.textAlign = 'left';
+        _ctx.textBaseline = 'top';
+        const lines = slide.text.split('\n');
+        let shown = 0;
+        for (let li = 0; li < lines.length; li++) {
+            const line = lines[li];
+            const visible = line.slice(0, Math.max(0, typewriterPos - shown));
+            shown += line.length;
+            _ctx.fillText(visible, s(boxX + 10), s(boxY + 12 + li * 14));
+        }
     }
 
     // Indicador de avance
@@ -153,10 +186,9 @@ export function drawStory(time) {
         _ctx.fillStyle = slide.accent;
         _ctx.font = `${s(8)}px Courier New`;
         _ctx.textAlign = 'right';
-        _ctx.fillText('▶ continuar', s(boxX + boxW - 8), s(boxY + boxH - 14));
+        _ctx.fillText(t('storyContinue'), s(boxX + boxW - 8), s(boxY + boxH - 14));
     }
 
-    // Pie de página
     _ctx.textBaseline = 'alphabetic';
     _ctx.fillStyle = 'rgba(255,255,255,0.3)';
     _ctx.font = `${s(7)}px Courier New`;
@@ -164,5 +196,5 @@ export function drawStory(time) {
     _ctx.fillText(`${slideIndex + 1} / ${SLIDES.length}`, s(BW / 2), s(BH - 20));
     _ctx.fillStyle = 'rgba(255,255,255,0.2)';
     _ctx.textAlign = 'right';
-    _ctx.fillText('ESC = saltar', s(BW - 10), s(BH - 20));
+    _ctx.fillText(t('storySkip'), s(BW - 10), s(BH - 20));
 }
